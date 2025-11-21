@@ -8,7 +8,7 @@
 #define WIDTH 1000
 #define HEIGHT 800
 #define TILE 100
-#define NUM_OBS 5
+#define NUM_OBS 12
 
 typedef struct { int x, y; } Posicion;
 
@@ -27,6 +27,35 @@ void inicializar(Juego *j) {
     j->puntaje = 0;
 
     // No superposición, arreglado
+    for (int i = 0; i < NUM_OBS; i++) {
+        int valido;
+        do {
+            valido = 1;
+            j->obstaculos[i].x = rand() % (WIDTH / TILE);
+            j->obstaculos[i].y = rand() % (HEIGHT / TILE);
+
+            // No sobre jugador
+            if (colision(j->obstaculos[i], j->jugador))
+                valido = 0;
+
+            // No sobre moneda
+            if (colision(j->obstaculos[i], j->moneda))
+                valido = 0;
+
+            // No sobre otros obstáculos
+            for (int k = 0; k < i; k++) {
+                if (colision(j->obstaculos[i], j->obstaculos[k])) {
+                    valido = 0;
+                    break;
+                }
+            }
+        } while (!valido);
+    }
+}
+
+
+// Funcion para mover obst. aleatoriamente
+void mover_obstaculos(Juego *j) {
     for (int i = 0; i < NUM_OBS; i++) {
         int valido;
         do {
@@ -79,7 +108,7 @@ void verificar(Juego *j, int colisionActiva) {
             if (colision(j->moneda, j->jugador))
                 valido = 0;
 
-            //No sobre obstaculos
+            // No sobre obstáculos
             for (int i = 0; i < NUM_OBS; i++) {
                 if (colision(j->moneda, j->obstaculos[i])) {
                     valido = 0;
@@ -87,9 +116,12 @@ void verificar(Juego *j, int colisionActiva) {
                 }
             }
         } while (!valido);
+
+        // Mover obstaculos al atrapar una moneda
+        mover_obstaculos(j);
     }
 
-    //Jugador choca con obstculo
+    // Jugador choca con obstculo
     if (colisionActiva) {
         for (int i = 0; i < NUM_OBS; i++) {
             if (colision(j->jugador, j->obstaculos[i])) {
@@ -102,6 +134,7 @@ void verificar(Juego *j, int colisionActiva) {
     }
 }
 
+
 void render_text(SDL_Renderer *ren, TTF_Font *font, const char *text, int x, int y, SDL_Color color) {
     SDL_Surface *surface = TTF_RenderText_Solid(font, text, color);
     SDL_Texture *texture = SDL_CreateTextureFromSurface(ren, surface);
@@ -110,6 +143,7 @@ void render_text(SDL_Renderer *ren, TTF_Font *font, const char *text, int x, int
     SDL_FreeSurface(surface);
     SDL_DestroyTexture(texture);
 }
+
 
 SDL_Texture* cargar_textura(SDL_Renderer *ren, const char *archivo) {
     SDL_Surface *img = IMG_Load(archivo);
@@ -152,15 +186,14 @@ int main() {
     SDL_Texture *texJugador = cargar_textura(ren, "ddragon.png");
     SDL_Texture *texMoneda = cargar_textura(ren, "moneda.png");
     SDL_Texture *texObstaculo = cargar_textura(ren, "espadaa.png");
-    SDL_Texture *texFondo = cargar_textura(ren, "fonndo.png"); 
+    SDL_Texture *texFondo = cargar_textura(ren, "fonndo.png");
 
     Juego j;
     inicializar(&j);
 
     int running = 1;
     SDL_Event e;
-    Uint32 lastTime = 0, lastToggle = SDL_GetTicks();
-    int mostrarObstaculos = 1;
+    Uint32 lastTime = 0;
 
     while (running && j.vidas > 0) {
         while (SDL_PollEvent(&e)) {
@@ -169,13 +202,6 @@ int main() {
                 if (e.key.keysym.sym == SDLK_x) running = 0;
                 else mover(&j, e.key.keysym.sym);
             }
-        }
-
-        Uint32 now = SDL_GetTicks();
-         // alternar visibilidad 
-        if (now - lastToggle > 1000) {
-            mostrarObstaculos = !mostrarObstaculos;
-            lastToggle = now;
         }
 
         verificar(&j, 1);
@@ -191,11 +217,9 @@ int main() {
         SDL_RenderCopy(ren, texMoneda, NULL, &coin);
 
         // Obstáculos
-        if (mostrarObstaculos) {
-            for (int i = 0; i < NUM_OBS; i++) {
-                SDL_Rect r = {j.obstaculos[i].x * TILE, j.obstaculos[i].y * TILE, TILE, TILE};
-                SDL_RenderCopy(ren, texObstaculo, NULL, &r);
-            }
+        for (int i = 0; i < NUM_OBS; i++) {
+            SDL_Rect r = {j.obstaculos[i].x * TILE, j.obstaculos[i].y * TILE, TILE, TILE};
+            SDL_RenderCopy(ren, texObstaculo, NULL, &r);
         }
 
         // Jugador
@@ -210,12 +234,12 @@ int main() {
 
         SDL_RenderPresent(ren);
 
-        if (now - lastTime < 16)
-            SDL_Delay(16 - (now - lastTime));
-        lastTime = now;
+        if (SDL_GetTicks() - lastTime < 16)
+            SDL_Delay(16 - (SDL_GetTicks() - lastTime));
+        lastTime = SDL_GetTicks();
     }
 
-        // Game Over
+        // Vidas y puntaje
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
     SDL_Color red = {255, 50, 50, 255};
