@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+#include <SDL2/SDL_image.h>
 
-#define WIDTH 800
-#define HEIGHT 400
-#define TILE 40
+#define WIDTH 1000
+#define HEIGHT 800
+#define TILE 100
 #define NUM_OBS 5
 
 typedef struct { int x, y; } Posicion;
@@ -16,9 +17,6 @@ typedef struct {
     int vidas, puntaje;
 } Juego;
 
-
-
-//
 void inicializar(Juego *j) {
     srand(time(NULL));
     j->jugador.x = WIDTH / (2 * TILE);
@@ -44,11 +42,6 @@ void mover(Juego *j, SDL_Keycode key) {
         case SDLK_d: if (j->jugador.x < WIDTH / TILE - 1) j->jugador.x++; break;
     }
 }
-
-
-
-
-// cierre de cambios //
 
 int colision(Posicion a, Posicion b) { return a.x == b.x && a.y == b.y; }
 
@@ -79,6 +72,17 @@ void render_text(SDL_Renderer *ren, TTF_Font *font, const char *text, int x, int
     SDL_DestroyTexture(texture);
 }
 
+SDL_Texture* cargar_textura(SDL_Renderer *ren, const char *archivo) {
+    SDL_Surface *img = IMG_Load(archivo);
+    if (!img) {
+        printf("Error cargando imagen %s: %s\n", archivo, IMG_GetError());
+        return NULL;
+    }
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(ren, img);
+    SDL_FreeSurface(img);
+    return tex;
+}
+
 int main() {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         printf("Error inicializando SDL: %s\n", SDL_GetError());
@@ -88,23 +92,28 @@ int main() {
         printf("Error inicializando SDL_ttf: %s\n", TTF_GetError());
         return 1;
     }
+    if (IMG_Init(IMG_INIT_PNG) == 0) {
+        printf("Error inicializando SDL_image: %s\n", IMG_GetError());
+        return 1;
+    }
+
     SDL_Window *win = SDL_CreateWindow("Atrapa la Moneda",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WIDTH, HEIGHT, 0);
-    if (!win) {
-        printf("Error creando ventana: %s\n", SDL_GetError());
-        return 1;
-    }
     SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
-    if (!ren) {
-        printf("Error creando renderer: %s\n", SDL_GetError());
-        return 1;
-    }
+
+    // Fuente
     TTF_Font *font = TTF_OpenFont("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20);
     if (!font) {
         printf("Error cargando fuente: %s\n", TTF_GetError());
         return 1;
     }
+
+    // Cargar imágenes
+    SDL_Texture *texJugador = cargar_textura(ren, "ddragon.png");
+    SDL_Texture *texMoneda = cargar_textura(ren, "moneda.png");
+    SDL_Texture *texObstaculo = cargar_textura(ren, "espadaa.png");
+    SDL_Texture *texFondo = cargar_textura(ren, "fonndo.png"); 
 
     Juego j;
     inicializar(&j);
@@ -124,36 +133,35 @@ int main() {
         }
 
         Uint32 now = SDL_GetTicks();
-        // alternar visibilidad 
-        if (now - lastToggle > 1000) {
+         // alternar visibilidad 
+        if (now - lastToggle > 2000) {
             mostrarObstaculos = !mostrarObstaculos;
             lastToggle = now;
         }
 
-        verificar(&j, 1); // colisiones activas 
+        verificar(&j, 1);
 
-        // Renderizado
-        SDL_SetRenderDrawColor(ren, 20, 20, 20, 255);
+        // Fondo
+        SDL_SetRenderDrawColor(ren, 30, 30, 30, 255);
         SDL_RenderClear(ren);
+        if (texFondo)
+            SDL_RenderCopy(ren, texFondo, NULL, NULL);
 
         // Moneda
         SDL_Rect coin = {j.moneda.x * TILE, j.moneda.y * TILE, TILE, TILE};
-        SDL_SetRenderDrawColor(ren, 255, 215, 0, 255);
-        SDL_RenderFillRect(ren, &coin);
+        SDL_RenderCopy(ren, texMoneda, NULL, &coin);
 
         // Obstáculos
         if (mostrarObstaculos) {
-            SDL_SetRenderDrawColor(ren, 180, 0, 0, 255);
             for (int i = 0; i < NUM_OBS; i++) {
                 SDL_Rect r = {j.obstaculos[i].x * TILE, j.obstaculos[i].y * TILE, TILE, TILE};
-                SDL_RenderFillRect(ren, &r);
+                SDL_RenderCopy(ren, texObstaculo, NULL, &r);
             }
         }
 
         // Jugador
-        SDL_SetRenderDrawColor(ren, 0, 200, 0, 255);
         SDL_Rect p = {j.jugador.x * TILE, j.jugador.y * TILE, TILE, TILE};
-        SDL_RenderFillRect(ren, &p);
+        SDL_RenderCopy(ren, texJugador, NULL, &p);
 
         // Vidas y puntaje
         char texto[64];
@@ -167,25 +175,19 @@ int main() {
             SDL_Delay(16 - (now - lastTime));
         lastTime = now;
     }
-
-    // Game Over
+    
+        // Game Over
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
-    
     SDL_Color red = {255, 50, 50, 255};
     SDL_Color white = {255, 255, 255, 255};
-    
     render_text(ren, font, "GAME OVER", WIDTH / 2 - 80, HEIGHT / 2 - 40, red);
-    
     char final[64];
     sprintf(final, "Puntaje final: %d", j.puntaje);
     render_text(ren, font, final, WIDTH / 2 - 90, HEIGHT / 2 + 10, white);
-    
     render_text(ren, font, "Presiona cualquier tecla para salir", WIDTH / 2 - 190, HEIGHT / 2 + 60, white);
-    
     SDL_RenderPresent(ren);
 
-	// Cierre
     int esperar = 1;
     while (esperar) {
         while (SDL_PollEvent(&e)) {
@@ -194,11 +196,16 @@ int main() {
         }
         SDL_Delay(10);
     }
-    
-	// Limpieza
+
+    // Limpieza
+    SDL_DestroyTexture(texJugador);
+    SDL_DestroyTexture(texMoneda);
+    SDL_DestroyTexture(texObstaculo);
+    if (texFondo) SDL_DestroyTexture(texFondo);
     TTF_CloseFont(font);
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
+    IMG_Quit();
     TTF_Quit();
     SDL_Quit();
 
