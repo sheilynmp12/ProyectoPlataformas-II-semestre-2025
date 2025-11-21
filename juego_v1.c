@@ -26,11 +26,30 @@ void inicializar(Juego *j) {
     j->vidas = 3;
     j->puntaje = 0;
 
+    // No superposición, arreglado
     for (int i = 0; i < NUM_OBS; i++) {
+        int valido;
         do {
+            valido = 1;
             j->obstaculos[i].x = rand() % (WIDTH / TILE);
             j->obstaculos[i].y = rand() % (HEIGHT / TILE);
-        } while (j->obstaculos[i].x == j->jugador.x && j->obstaculos[i].y == j->jugador.y);
+
+            // No sobre jugador
+            if (colision(j->obstaculos[i], j->jugador))
+                valido = 0;
+
+            // No sobre moneda
+            if (colision(j->obstaculos[i], j->moneda))
+                valido = 0;
+
+            // No sobre otros obstáculos
+            for (int k = 0; k < i; k++) {
+                if (colision(j->obstaculos[i], j->obstaculos[k])) {
+                    valido = 0;
+                    break;
+                }
+            }
+        } while (!valido);
     }
 }
 
@@ -46,11 +65,31 @@ void mover(Juego *j, SDL_Keycode key) {
 int colision(Posicion a, Posicion b) { return a.x == b.x && a.y == b.y; }
 
 void verificar(Juego *j, int colisionActiva) {
+    // Jugador atrapa moneda
     if (colisionActiva && colision(j->jugador, j->moneda)) {
         j->puntaje++;
-        j->moneda.x = rand() % (WIDTH / TILE);
-        j->moneda.y = rand() % (HEIGHT / TILE);
+
+        int valido;
+        do {
+            valido = 1;
+            j->moneda.x = rand() % (WIDTH / TILE);
+            j->moneda.y = rand() % (HEIGHT / TILE);
+
+            // No sobre jugador
+            if (colision(j->moneda, j->jugador))
+                valido = 0;
+
+            //No sobre obstaculos
+            for (int i = 0; i < NUM_OBS; i++) {
+                if (colision(j->moneda, j->obstaculos[i])) {
+                    valido = 0;
+                    break;
+                }
+            }
+        } while (!valido);
     }
+
+    //Jugador choca con obstculo
     if (colisionActiva) {
         for (int i = 0; i < NUM_OBS; i++) {
             if (colision(j->jugador, j->obstaculos[i])) {
@@ -134,7 +173,7 @@ int main() {
 
         Uint32 now = SDL_GetTicks();
          // alternar visibilidad 
-        if (now - lastToggle > 2000) {
+        if (now - lastToggle > 1000) {
             mostrarObstaculos = !mostrarObstaculos;
             lastToggle = now;
         }
@@ -175,7 +214,7 @@ int main() {
             SDL_Delay(16 - (now - lastTime));
         lastTime = now;
     }
-    
+
         // Game Over
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
