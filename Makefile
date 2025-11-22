@@ -1,2 +1,3 @@
 all:
-	gcc main.c -o programa
+	gcc juego_v1.c -o juego
+	
